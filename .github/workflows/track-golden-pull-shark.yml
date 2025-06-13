@@ -1,0 +1,45 @@
+name: Track Golden Pull Shark Progress
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily
+  workflow_dispatch:
+
+jobs:
+  count_merged_prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Count merged PRs
+        id: count
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            let mergedPRs = 0;
+            let page = 1;
+            const per_page = 100;
+            while (true) {
+              const { data: pulls } = await github.rest.pulls.list({
+                owner, repo, state: 'closed', per_page, page
+              });
+              if (pulls.length === 0) break;
+              mergedPRs += pulls.filter(pr => pr.merged_at).length;
+              if (pulls.length < per_page) break;
+              page++;
+            }
+            core.setOutput('merged_prs', mergedPRs);
+            if (mergedPRs >= 128) {
+              core.notice(`🎉 Congratulations! You have ${mergedPRs} merged pull requests. Golden Pull Shark unlocked!`);
+            } else {
+              core.notice(`You have ${mergedPRs} merged pull requests. ${128 - mergedPRs} to go for Golden Pull Shark!`);
+            }
+
+      - name: Post to Issue (optional)
+        if: steps.count.outputs.merged_prs == '128'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Golden Pull Shark Milestone Achieved!"
+          content-filepath: .github/pull-shark-congrats.md
+          labels: |
+            achievement
